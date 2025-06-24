@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pH值監控系統</title>
+    <style>
+        /* 基本樣式設定 */
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        /* 按鈕樣式 */
+        .controls {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        button {
+            padding: 12px 24px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .btn-start {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .btn-stop {
+            background-color: #f44336;
+            color: white;
+        }
+        
+        .btn-clear {
+            background-color: #ff9800;
+            color: white;
+        }
+        
+        button:hover:not(:disabled) {
+            opacity: 0.8;
+        }
+        
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        /* 狀態顯示 */
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+        
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+        }
+        
+        /* 感測器網格佈局 */
+        .sensors-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        /* 感測器框樣式 */
+        .sensor-box {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 2px solid #dee2e6;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .sensor-box.ph {
+            border-color: #007bff;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        }
+        
+        .sensor-box.orp {
+            border-color: #28a745;
+            background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+        }
+        
+        .sensor-box.voltage {
+            border-color: #ffc107;
+            background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+        }
+        
+        .sensor-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        .sensor-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .sensor-box.ph .sensor-title {
+            color: #0056b3;
+        }
+        
+        .sensor-box.orp .sensor-title {
+            color: #1e7e34;
+        }
+        
+        .sensor-box.voltage .sensor-title {
+            color: #d39e00;
+        }
+        
+        .sensor-value {
+            font-size: 36px;
+            font-weight: bold;
+            margin: 10px 0;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .sensor-box.ph .sensor-value {
+            color: #004085;
+        }
+        
+        .sensor-box.orp .sensor-value {
+            color: #155724;
+        }
+        
+        .sensor-box.voltage .sensor-value {
+            color: #856404;
+        }
+        
+        .sensor-unit {
+            font-size: 16px;
+            color: #6c757d;
+            font-weight: normal;
+            margin-top: 5px;
+        }
+        
+        .sensor-timestamp {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 10px;
+        }
+        
+        .sensor-status {
+            font-size: 14px;
+            margin-top: 10px;
+            padding: 5px 10px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+        
+        .sensor-status.active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .sensor-status.inactive {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        /* 等待數據的狀態 */
+        .waiting {
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        /* 錯誤顯示 */
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 2px solid #ef9a9a;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        /* 響應式設計 */
+        @media (max-width: 768px) {
+            .sensors-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .sensor-value {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 pH值即時監控系統</h1>
+        
+        <!-- 控制按鈕 -->
+        <div class="controls">
+            <button id="startBtn" class="btn-start">🚀 開始監控</button>
+            <button id="stopBtn" class="btn-stop" disabled>⏹️ 停止監控</button>
+            <button id="clearBtn" class="btn-clear">🧹 清除顯示</button>
+        </div>
+        
+        <!-- 連接狀態 -->
+        <div id="status" class="status disconnected">🔴 未連接</div>
+        
+        <!-- 感測器顯示區域 -->
+        <div class="sensors-grid">
+            <!-- pH值顯示框 -->
+            <div class="sensor-box ph" id="phBox">
+                <div class="sensor-title">📊 pH值</div>
+                <div class="sensor-value waiting" id="phValue">等待數據...</div>
+                <div class="sensor-unit">pH</div>
+                <div class="sensor-timestamp" id="phTimestamp"></div>
+                <div class="sensor-status inactive" id="phStatus">未激活</div>
+            </div>
+            
+            <!-- ORP值顯示框 -->
+            <div class="sensor-box orp" id="orpBox">
+                <div class="sensor-title">⚡ ORP值</div>
+                <div class="sensor-value waiting" id="orpValue">等待數據...</div>
+                <div class="sensor-unit">mV</div>
+                <div class="sensor-timestamp" id="orpTimestamp"></div>
+                <div class="sensor-status inactive" id="orpStatus">未激活</div>
+            </div>
+        </div>
+        
+        <!-- 錯誤顯示區域 -->
+        <div id="errorDisplay" style="display: none;"></div>
+    </div>
+
+    <script>
+        // ===================
+        // JavaScript 開始
+        // ===================
+        
+        // 1. 獲取HTML元素
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const statusDiv = document.getElementById('status');
+        const errorDisplay = document.getElementById('errorDisplay');
+        
+        // 感測器元素
+        const phValue = document.getElementById('phValue');
+        const phTimestamp = document.getElementById('phTimestamp');
+        const phStatus = document.getElementById('phStatus');
+        
+        const orpValue = document.getElementById('orpValue');
+        const orpTimestamp = document.getElementById('orpTimestamp');
+        const orpStatus = document.getElementById('orpStatus');
+        
+        // 2. 全局變數
+        let eventSource = null;  // 用來存儲SSE連接
+        
+        // 3. 更新單個感測器顯示的函數
+        function updateSensorDisplay(type, value, timestamp, unit = '') {
+            const currentTime = new Date().toLocaleString('zh-TW', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+            
+            let valueElement, timestampElement, statusElement;
+            
+            switch(type) {
+                case 'ph':
+                    valueElement = phValue;
+                    timestampElement = phTimestamp;
+                    statusElement = phStatus;
+                    break;
+                case 'orp':
+                    valueElement = orpValue;
+                    timestampElement = orpTimestamp;
+                    statusElement = orpStatus;
+                    break;
+                default:
+                    return;
+            }
+            
+            // 更新數值
+            if (value !== null && value !== undefined) {
+                valueElement.textContent = value + (unit ? ` ${unit}` : '');
+                valueElement.className = 'sensor-value';
+                
+                // 更新時間戳
+                timestampElement.textContent = `更新時間: ${currentTime}`;
+                if (timestamp) {
+                    timestampElement.textContent += ` | 數據時間: ${timestamp}`;
+                }
+                
+                // 更新狀態
+                statusElement.textContent = '運行中';
+                statusElement.className = 'sensor-status active';
+            }
+        }
+        
+        // 4. 處理接收到的數據
+        function handleData(data) {
+            // 隱藏錯誤顯示
+            errorDisplay.style.display = 'none';
+            
+            // 檢查數據格式
+            if (data.latest_data) {
+                const latest = data.latest_data;
+                
+                // 更新各個感測器
+                if (latest.ph_value !== undefined) {
+                    updateSensorDisplay('ph', latest.ph_value, latest.timestamp);
+                }
+                
+                if (latest.orp_value !== undefined) {
+                    updateSensorDisplay('orp', latest.orp_value, latest.timestamp);
+                }
+            }
+        }
+        
+        // 5. 顯示錯誤訊息
+        function showError(message) {
+            errorDisplay.innerHTML = `<div class="error">❌ 錯誤: ${message}</div>`;
+            errorDisplay.style.display = 'block';
+        }
+        
+        // 6. 開始監控的函數
+        function startMonitoring() {
+            // 如果已經有連接，先關閉它
+            if (eventSource) {
+                eventSource.close();
+            }
+            
+            // ⚠️ 重要：這裡要改成你的後端服務器地址
+            eventSource = new EventSource('http://127.0.0.1:8000/api/v1/data1/data/replace');
+            
+            // 連接成功時的處理
+            eventSource.onopen = function(event) {
+                console.log('SSE連接已建立');
+                statusDiv.textContent = '🟢 已連接';
+                statusDiv.className = 'status connected';
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            };
+            
+            // 接收到數據時的處理
+            eventSource.onmessage = function(event) {
+                console.log('收到數據:', event.data);
+                
+                try {
+                    // 解析JSON數據
+                    const data = JSON.parse(event.data);
+                    
+                    // 檢查是否有錯誤
+                    if (data.error) {
+                        showError(data.error);
+                        return;
+                    }
+                    
+                    // 處理數據
+                    handleData(data);
+                    
+                } catch (error) {
+                    console.error('解析數據失敗:', error);
+                    showError(`數據解析錯誤: ${error.message}`);
+                }
+            };
+            
+            // 連接錯誤時的處理
+            eventSource.onerror = function(event) {
+                console.error('SSE連接錯誤:', event);
+                statusDiv.textContent = '🔴 連接錯誤';
+                statusDiv.className = 'status disconnected';
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                
+                // 設置所有感測器為未激活狀態
+                [phStatus, orpStatus].forEach(status => {
+                    status.textContent = '連接中斷';
+                    status.className = 'sensor-status inactive';
+                });
+                
+                // 自動重連（可選）
+                setTimeout(() => {
+                    if (eventSource && eventSource.readyState === EventSource.CLOSED) {
+                        console.log('嘗試重新連接...');
+                        startMonitoring();
+                    }
+                }, 5000); // 5秒後重連
+            };
+        }
+        
+        // 7. 停止監控的函數
+        function stopMonitoring() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            
+            statusDiv.textContent = '🔴 已斷開連接';
+            statusDiv.className = 'status disconnected';
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            
+            // 設置所有感測器為未激活狀態
+            [phStatus, orpStatus].forEach(status => {
+                status.textContent = '未激活';
+                status.className = 'sensor-status inactive';
+            });
+        }
+        
+        // 8. 清除顯示的函數
+        function clearDisplay() {
+            // 重置所有感測器顯示
+            [phValue, orpValue].forEach(element => {
+                element.textContent = '等待數據...';
+                element.className = 'sensor-value waiting';
+            });
+            
+            [phTimestamp, orpTimestamp].forEach(element => {
+                element.textContent = '';
+            });
+            
+            [phStatus, orpStatus].forEach(status => {
+                status.textContent = '未激活';
+                status.className = 'sensor-status inactive';
+            });
+            
+            // 隱藏錯誤顯示
+            errorDisplay.style.display = 'none';
+        }
+        
+        // 9. 綁定按鈕事件
+        startBtn.addEventListener('click', startMonitoring);
+        stopBtn.addEventListener('click', stopMonitoring);
+        clearBtn.addEventListener('click', clearDisplay);
+        
+        // 10. 頁面關閉時清理資源
+        window.addEventListener('beforeunload', function() {
+            if (eventSource) {
+                eventSource.close();
+            }
+        });
+        
+        // ===================
+        // JavaScript 結束
+        // ===================
+    </script>
+</body>
+</html>
