@@ -5,8 +5,6 @@ from routers.api_v1.routers import router
 
 app = FastAPI()
 
-app.include_router(router, prefix="/api/v1")
-
 # 設定模板資料夾
 templates = Jinja2Templates(directory="templates")
 

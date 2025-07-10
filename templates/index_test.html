@@ -306,7 +306,8 @@
         // JavaScript 開始
         // ===================
 
-        const API_BASE_URL = 'https://github.com/k31491896/cems_arduino';
+        const API_BASE_URL = 'https://cems-arduino.onrender.com';
+        //const API_BASE_URL = 'http://127.0.0.1:8000';  // 替換為你的後端服務器地址
         
         // 1. 獲取HTML元素
         const startBtn = document.getElementById('startBtn');
@@ -427,7 +428,7 @@
         // 6. 檢查資料庫健康狀態
         async function checkDatabaseHealth() {
             try {
-                const response = await fetch('${API_BASE_URL}/api/v1/data/health');
+                const response = await fetch(`${API_BASE_URL}/api/v1/data/health`);
                 
                 if (response.ok) {
                     const data = await response.json();
@@ -453,7 +454,7 @@
             statusDiv.className = 'status connecting';
             
             // ⚠️ 重要：這裡要改成你的後端服務器地址
-            eventSource = new EventSource('${API_BASE_URL}/api/v1/data/replace');
+            eventSource = new EventSource(`${API_BASE_URL}/api/v1/data/replace`);
             
             // 連接成功時的處理
             eventSource.onopen = function(event) {
