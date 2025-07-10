@@ -19,4 +19,4 @@ app.include_router(router, prefix="/api/v1")
 # 新增一個路由，回傳 HTML 頁面
 @app.get("/", response_class=templates.TemplateResponse)
 async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("index_test.html", {"request": request})

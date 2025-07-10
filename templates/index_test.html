@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>pH值監控系統</title>
+    <title>感測器監控系統 - PostgreSQL版</title>
     <style>
         /* 基本樣式設定 */
         body {
@@ -59,6 +59,11 @@
             color: white;
         }
         
+        .btn-health {
+            background-color: #2196F3;
+            color: white;
+        }
+        
         button:hover:not(:disabled) {
             opacity: 0.8;
         }
@@ -90,6 +95,12 @@
             border: 2px solid #f5c6cb;
         }
         
+        .status.connecting {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 2px solid #ffeaa7;
+        }
+        
         /* 感測器網格佈局 */
         .sensors-grid {
             display: grid;
@@ -119,9 +130,9 @@
             background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
         }
         
-        .sensor-box.voltage {
+        .sensor-box.ntu {
             border-color: #ffc107;
-            background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
         }
         
         .sensor-box:hover {
@@ -144,9 +155,9 @@
         .sensor-box.orp .sensor-title {
             color: #1e7e34;
         }
-        
-        .sensor-box.voltage .sensor-title {
-            color: #d39e00;
+
+        .sensor-box.ntu .sensor-title {
+            color: #856404;
         }
         
         .sensor-value {
@@ -166,8 +177,8 @@
         .sensor-box.orp .sensor-value {
             color: #155724;
         }
-        
-        .sensor-box.voltage .sensor-value {
+
+        .sensor-box.ntu .sensor-value {
             color: #856404;
         }
         
@@ -219,6 +230,17 @@
             text-align: center;
         }
         
+        /* 成功顯示 */
+        .success {
+            background-color: #e8f5e8;
+            color: #2e7d32;
+            border: 2px solid #a5d6a7;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        
         /* 響應式設計 */
         @media (max-width: 768px) {
             .sensors-grid {
@@ -233,13 +255,14 @@
 </head>
 <body>
     <div class="container">
-        <h1>🔬 pH值即時監控系統</h1>
+        <h1>🔬 感測器即時監控系統 (PostgreSQL版)</h1>
         
         <!-- 控制按鈕 -->
         <div class="controls">
             <button id="startBtn" class="btn-start">🚀 開始監控</button>
             <button id="stopBtn" class="btn-stop" disabled>⏹️ 停止監控</button>
             <button id="clearBtn" class="btn-clear">🧹 清除顯示</button>
+            <button id="healthBtn" class="btn-health">💊 檢查資料庫</button>
         </div>
         
         <!-- 連接狀態 -->
@@ -264,23 +287,34 @@
                 <div class="sensor-timestamp" id="orpTimestamp"></div>
                 <div class="sensor-status inactive" id="orpStatus">未激活</div>
             </div>
+            <!-- 濁度值顯示框 -->
+            <div class="sensor-box ntu" id="ntuBox">
+                <div class="sensor-title">🌊 濁度值</div>
+                <div class="sensor-value waiting" id="ntuValue">等待數據...</div>
+                <div class="sensor-unit">NTU</div>
+                <div class="sensor-timestamp" id="ntuTimestamp"></div>
+                <div class="sensor-status inactive" id="ntuStatus">未激活</div>
+            </div>
         </div>
         
-        <!-- 錯誤顯示區域 -->
-        <div id="errorDisplay" style="display: none;"></div>
+        <!-- 錯誤/成功顯示區域 -->
+        <div id="messageDisplay" style="display: none;"></div>
     </div>
 
     <script>
         // ===================
         // JavaScript 開始
         // ===================
+
+        const API_BASE_URL = 'https://github.com/k31491896/cems_arduino';
         
         // 1. 獲取HTML元素
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const clearBtn = document.getElementById('clearBtn');
+        const healthBtn = document.getElementById('healthBtn');
         const statusDiv = document.getElementById('status');
-        const errorDisplay = document.getElementById('errorDisplay');
+        const messageDisplay = document.getElementById('messageDisplay');
         
         // 感測器元素
         const phValue = document.getElementById('phValue');
@@ -290,6 +324,10 @@
         const orpValue = document.getElementById('orpValue');
         const orpTimestamp = document.getElementById('orpTimestamp');
         const orpStatus = document.getElementById('orpStatus');
+
+        const ntuValue = document.getElementById('ntuValue');
+        const ntuTimestamp = document.getElementById('ntuTimestamp');
+        const ntuStatus = document.getElementById('ntuStatus');
         
         // 2. 全局變數
         let eventSource = null;  // 用來存儲SSE連接
@@ -319,6 +357,11 @@
                     timestampElement = orpTimestamp;
                     statusElement = orpStatus;
                     break;
+                case 'ntu':
+                    valueElement = ntuValue;
+                    timestampElement = ntuTimestamp;
+                    statusElement = ntuStatus;
+                    break;
                 default:
                     return;
             }
@@ -331,7 +374,17 @@
                 // 更新時間戳
                 timestampElement.textContent = `更新時間: ${currentTime}`;
                 if (timestamp) {
-                    timestampElement.textContent += ` | 數據時間: ${timestamp}`;
+                    // 格式化資料庫時間戳
+                    const dbTime = new Date(timestamp).toLocaleString('zh-TW', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: false
+                    });
+                    timestampElement.textContent += ` | 數據時間: ${dbTime}`;
                 }
                 
                 // 更新狀態
@@ -342,47 +395,74 @@
         
         // 4. 處理接收到的數據
         function handleData(data) {
-            // 隱藏錯誤顯示
-            errorDisplay.style.display = 'none';
+            // 隱藏訊息顯示
+            messageDisplay.style.display = 'none';
             
             // 檢查數據格式
             if (data.latest_data) {
                 const latest = data.latest_data;
                 
                 // 更新各個感測器
-                if (latest.ph_value !== undefined) {
+                if (latest.ph_value !== undefined && latest.ph_value !== null) {
                     updateSensorDisplay('ph', latest.ph_value, latest.timestamp);
                 }
                 
-                if (latest.orp_value !== undefined) {
+                if (latest.orp_value !== undefined && latest.orp_value !== null) {
                     updateSensorDisplay('orp', latest.orp_value, latest.timestamp);
+                }
+                if (latest.ntu_value !== undefined && latest.ntu_value !== null) {
+                    updateSensorDisplay('ntu', latest.ntu_value, latest.timestamp);
                 }
             }
         }
         
-        // 5. 顯示錯誤訊息
-        function showError(message) {
-            errorDisplay.innerHTML = `<div class="error">❌ 錯誤: ${message}</div>`;
-            errorDisplay.style.display = 'block';
+        // 5. 顯示訊息
+        function showMessage(message, type = 'error') {
+            const className = type === 'error' ? 'error' : 'success';
+            const icon = type === 'error' ? '❌' : '✅';
+            messageDisplay.innerHTML = `<div class="${className}">${icon} ${message}</div>`;
+            messageDisplay.style.display = 'block';
         }
         
-        // 6. 開始監控的函數
+        // 6. 檢查資料庫健康狀態
+        async function checkDatabaseHealth() {
+            try {
+                const response = await fetch('${API_BASE_URL}/api/v1/data/health');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showMessage(`資料庫狀態: ${data.status} - ${data.database}`, 'success');
+                } else {
+                    const errorData = await response.json();
+                    showMessage(`資料庫檢查失敗: ${errorData.detail}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`無法連接到後端服務: ${error.message}`, 'error');
+            }
+        }
+        
+        // 7. 開始監控的函數
         function startMonitoring() {
             // 如果已經有連接，先關閉它
             if (eventSource) {
                 eventSource.close();
             }
             
+            // 顯示連接中狀態
+            statusDiv.textContent = '🟡 連接中...';
+            statusDiv.className = 'status connecting';
+            
             // ⚠️ 重要：這裡要改成你的後端服務器地址
-            eventSource = new EventSource('http://127.0.0.1:8000/api/v1/data1/data/replace');
+            eventSource = new EventSource('${API_BASE_URL}/api/v1/data/replace');
             
             // 連接成功時的處理
             eventSource.onopen = function(event) {
                 console.log('SSE連接已建立');
-                statusDiv.textContent = '🟢 已連接';
+                statusDiv.textContent = '🟢 已連接資料庫';
                 statusDiv.className = 'status connected';
                 startBtn.disabled = true;
                 stopBtn.disabled = false;
+                messageDisplay.style.display = 'none';
             };
             
             // 接收到數據時的處理
@@ -395,7 +475,7 @@
                     
                     // 檢查是否有錯誤
                     if (data.error) {
-                        showError(data.error);
+                        showMessage(data.error, 'error');
                         return;
                     }
                     
@@ -404,7 +484,7 @@
                     
                 } catch (error) {
                     console.error('解析數據失敗:', error);
-                    showError(`數據解析錯誤: ${error.message}`);
+                    showMessage(`數據解析錯誤: ${error.message}`, 'error');
                 }
             };
             
@@ -417,10 +497,12 @@
                 stopBtn.disabled = true;
                 
                 // 設置所有感測器為未激活狀態
-                [phStatus, orpStatus].forEach(status => {
+                [phStatus, orpStatus,ntuStatus].forEach(status => {
                     status.textContent = '連接中斷';
                     status.className = 'sensor-status inactive';
                 });
+                
+                showMessage('連接中斷，將在5秒後嘗試重新連接...', 'error');
                 
                 // 自動重連（可選）
                 setTimeout(() => {
@@ -432,7 +514,7 @@
             };
         }
         
-        // 7. 停止監控的函數
+        // 8. 停止監控的函數
         function stopMonitoring() {
             if (eventSource) {
                 eventSource.close();
@@ -445,39 +527,42 @@
             stopBtn.disabled = true;
             
             // 設置所有感測器為未激活狀態
-            [phStatus, orpStatus].forEach(status => {
+            [phStatus, orpStatus,ntuStatus].forEach(status => {
                 status.textContent = '未激活';
                 status.className = 'sensor-status inactive';
             });
+            
+            messageDisplay.style.display = 'none';
         }
         
-        // 8. 清除顯示的函數
+        // 9. 清除顯示的函數
         function clearDisplay() {
             // 重置所有感測器顯示
-            [phValue, orpValue].forEach(element => {
+            [phValue, orpValue, ntuValue].forEach(element => {
                 element.textContent = '等待數據...';
                 element.className = 'sensor-value waiting';
             });
             
-            [phTimestamp, orpTimestamp].forEach(element => {
+            [phTimestamp, orpTimestamp, ntuTimestamp].forEach(element => {
                 element.textContent = '';
             });
             
-            [phStatus, orpStatus].forEach(status => {
+            [phStatus, orpStatus,ntuStatus].forEach(status => {
                 status.textContent = '未激活';
                 status.className = 'sensor-status inactive';
             });
             
-            // 隱藏錯誤顯示
-            errorDisplay.style.display = 'none';
+            // 隱藏訊息顯示
+            messageDisplay.style.display = 'none';
         }
         
-        // 9. 綁定按鈕事件
+        // 10. 綁定按鈕事件
         startBtn.addEventListener('click', startMonitoring);
         stopBtn.addEventListener('click', stopMonitoring);
         clearBtn.addEventListener('click', clearDisplay);
+        healthBtn.addEventListener('click', checkDatabaseHealth);
         
-        // 10. 頁面關閉時清理資源
+        // 11. 頁面關閉時清理資源
         window.addEventListener('beforeunload', function() {
             if (eventSource) {
                 eventSource.close();

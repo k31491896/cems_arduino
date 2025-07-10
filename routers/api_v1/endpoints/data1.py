@@ -47,15 +47,13 @@ def read_data_file():
             parts = latest_line.split(', ')
             if len(parts) >= 3:
                 timestamp = parts[0]
-                voltage = parts[1]
-                ph_value = parts[2]
-                orp_value = parts[3]
+                ph_value = parts[1]
+                orp_value = parts[2]
                 
                 result = {
                     "status": "success",
                     "latest_data": {
                         "timestamp": timestamp,
-                        "voltage": voltage,
                         "ph_value": ph_value,
                         "orp_value": orp_value
                     },
@@ -109,9 +107,8 @@ def read_all_data():
                 if len(parts) >= 3:
                     parsed_data.append({
                         "timestamp": parts[0],
-                        "voltage": parts[1],
-                        "ph_value": parts[2],
-                        "orp_value": parts[3]
+                        "ph_value": parts[1],
+                        "orp_value": parts[2]
                     })
                 else:
                     parsed_data.append({
@@ -140,7 +137,7 @@ async def get_data():
         raise HTTPException(status_code=500, detail=result["error"])
     return result
 
-@router.get("/data/replace")
+@router.get("/replace")
 async def stream_data_with_replace():
     """SSE端點，專門用於替換模式 - 只推送最新數據"""
     last_sent_replace_data = None
@@ -210,53 +207,6 @@ async def stream_data_with_replace():
         }
     )
 
-@router.get("/data/stream")
-async def stream_data():
-    """SSE端點，用於實時推送數據 - 只在數據變化時發送"""
-    global last_sent_data
-    
-    async def event_generator():
-        global last_sent_data
-        
-        while True:
-            try:
-                # 讀取最新數據
-                data = read_data_file()
-                
-                # 比較數據是否有變化 - 使用時間戳或數據內容
-                current_data_key = None
-                if "latest_data" in data:
-                    # 使用時間戳作為變化檢測的依據
-                    current_data_key = data["latest_data"].get("timestamp", "") or data["latest_data"].get("data", "")
-                
-                # 只在數據有變化時發送
-                if current_data_key != last_sent_data:
-                    # 格式化為SSE格式
-                    json_data = json.dumps(data, ensure_ascii=False)
-                    yield f"data: {json_data}\n\n"
-                    last_sent_data = current_data_key
-                
-                # 等待2秒再檢查下一次更新（縮短檢查間隔）
-                await asyncio.sleep(2)
-                
-            except Exception as e:
-                error_data = {"error": str(e), "timestamp": datetime.now().isoformat()}
-                json_data = json.dumps(error_data, ensure_ascii=False)
-                yield f"data: {json_data}\n\n"
-                await asyncio.sleep(2)
-    
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET",
-            "Access-Control-Allow-Headers": "Cache-Control"
-        }
-    )
-
 @router.get("/data/all")
 async def get_all_data():
     """獲取所有歷史數據"""
@@ -264,11 +214,3 @@ async def get_all_data():
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
     return result
-
-@router.get("/test-replace")
-async def test_replace():
-    return {"message": "test replace endpoint working"}
-
-@router.post("")
-async def root():
-    return {"message": "Hello World"}
