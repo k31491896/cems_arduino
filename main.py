@@ -7,9 +7,6 @@ app = FastAPI()
 
 app.include_router(router, prefix="/api/v1")
 
-# 掛載靜態檔案資料夾 (如果有)
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
 # 設定模板資料夾
 templates = Jinja2Templates(directory="templates")
 
